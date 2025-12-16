@@ -1,0 +1,14 @@
+services:
+  master-server:
+    build: .
+    container_name: gmod-master-server
+    restart: unless-stopped
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      
+    ports:
+      - "55555:55555/udp"
+      
+    volumes:
+      - ./servers.json:/app/servers.json
