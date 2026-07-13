@@ -66,7 +66,7 @@ def fetch_and_update_servers():
             if 'addr' in server:
                 try:
                     ip, port_str = server['addr'].split(':')
-                    port = int(port_str)
+                    port = int(server['gameport'])
                     new_server_list_for_json.append({'ip': ip, 'port': port})
                 except (ValueError, IndexError):
                     print(f"[API WARN] Could not parse address: {server.get('addr')}")
