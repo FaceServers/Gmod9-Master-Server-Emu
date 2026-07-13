@@ -33,6 +33,59 @@ GAME_SERVERS = []
 LAST_MODIFIED_TIME = 0
 LAST_API_FETCH_TIME = 0
 
+
+def _parse_port(value):
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError
+    if isinstance(value, str) and (not value.isascii() or not value.isdecimal()):
+        raise ValueError
+
+    port = int(value)
+    if not 1 <= port <= 65535:
+        raise ValueError
+    return port
+
+
+def extract_legacy_server_address(server):
+    """Return the IPv4 gameplay endpoint for a Steam server entry."""
+    addr = server.get('addr') if isinstance(server, dict) else None
+    if not isinstance(addr, str):
+        print(f"[API WARN] Skipping invalid server address: {addr!r}")
+        return None
+
+    try:
+        ip, query_port_text = addr.rsplit(':', 1)
+        socket.inet_pton(socket.AF_INET, ip)
+        query_port = _parse_port(query_port_text)
+    except (OSError, ValueError):
+        print(f"[API WARN] Skipping invalid server address: {addr!r}")
+        return None
+
+    if 'gameport' not in server:
+        return ip, query_port
+
+    try:
+        return ip, _parse_port(server['gameport'])
+    except ValueError:
+        print(
+            f"[API WARN] Invalid gameport {server['gameport']!r} for {addr!r}; "
+            f"using addr port {query_port}."
+        )
+        return ip, query_port
+
+
+def build_legacy_server_list(servers):
+    """Translate Steam entries while preserving order and removing duplicates."""
+    result = []
+    seen = set()
+    for server in servers:
+        endpoint = extract_legacy_server_address(server)
+        if endpoint is not None and endpoint not in seen:
+            seen.add(endpoint)
+            result.append({'ip': endpoint[0], 'port': endpoint[1]})
+    return result
+
+
 def fetch_and_update_servers():
     """
     Fetches the server list from the Steam Web API and writes it to the JSON file.
@@ -61,15 +114,9 @@ def fetch_and_update_servers():
             return
 
         # Process the server list from the API response
-        new_server_list_for_json = []
-        for server in api_data['response']['servers']:
-            if 'addr' in server:
-                try:
-                    ip, port_str = server['addr'].split(':')
-                    port = int(port_str)
-                    new_server_list_for_json.append({'ip': ip, 'port': port})
-                except (ValueError, IndexError):
-                    print(f"[API WARN] Could not parse address: {server.get('addr')}")
+        new_server_list_for_json = build_legacy_server_list(
+            api_data['response']['servers']
+        )
 
         # Write the new list to the JSON file
         with open(SERVERS_FILENAME, 'w') as f:
